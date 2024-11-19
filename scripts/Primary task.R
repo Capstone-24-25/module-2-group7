@@ -7,8 +7,10 @@ library(tensorflow)
 library(dplyr)
 library(SnowballC)
 library(tm)
+library(caret)
 
 # load cleaned data
+#### Change this data set to the data set after preliminary task
 load('data/claims-clean-example.RData')
 
 # Preprocess text data for RNN
@@ -33,10 +35,10 @@ claims_clean <- claims_clean %>%
 
 # Encode binary label
 claims_clean <- claims_clean %>% 
-  mutate(y_binary = as.numeric(as.factor(claims_clean$bclass))-1)
+  mutate(y_binary = to_categorical(as.numeric(as.factor(claims_clean$bclass))-1))
 # Encode multiclass label
 claims_clean <- claims_clean %>% 
-  mutate(y_multiclass = as.numeric(as.factor(claims_clean$mclass))-1)
+  mutate(y_multiclass = to_categorical(as.numeric(as.factor(claims_clean$mclass))-1))
 
 # Train-test split
 set.seed(1)
@@ -61,7 +63,7 @@ binary_model <- keras_model_sequential()
 binary_model %>%
   layer_embedding(input_dim = 5000, output_dim = 128, input_length = maxlen) %>%  # Embedding layer
   layer_simple_rnn(units = 64, return_sequences = FALSE) %>%  # RNN layer
-  layer_dense(units = 1) %>%  # Dense layer
+  layer_dense(units = 2) %>%  # Dense layer
   layer_activation(activation = 'sigmoid')  # Activation layer
 
 summary(binary_model)
@@ -69,7 +71,7 @@ summary(binary_model)
 binary_model %>% compile(
   loss = 'binary_crossentropy',
   optimizer = 'adam',
-  metrics = c('accuracy')
+  metrics = c('binary_accuracy')
 )
 
 
@@ -80,8 +82,60 @@ history_binary <- binary_model %>% fit(
   batch_size = 32
 )
 
-evaluate(binary_model,X_test,y_test_binary)
+
+binary_pred<-predict(binary_model, X_test)
+bclass_pred <- factor(ifelse(binary_pred[,2] > 0.5, 1, 0), levels = c(0, 1))
+
+conf_matrix_binary <- confusionMatrix(bclass_pred, as.factor(as.numeric(test_data$bclass)-1))
+
+
+# Build RNN model for multi-clss classification
+multi_model <- keras_model_sequential()
+multi_model %>%
+  layer_embedding(input_dim = 5000, output_dim = 128, input_length = maxlen) %>%  # Embedding layer
+  layer_simple_rnn(units = 64, return_sequences = FALSE) %>%  # RNN layer
+  layer_dense(units = 5) %>%  # Dense layer
+  layer_activation(activation = 'softmax')  # Activation layer
+
+summary(multi_model)
+
+multi_model %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = 'adam',
+  metrics = c('accuracy')
+)
+
+
+# Train the multi class classification model
+history_multi <- multi_model %>% fit(
+  X_train, y_train_multiclass,
+  epochs = 10,
+  batch_size = 32
+)
+
+multi_pred<-predict(multi_model, X_test)
+mclass_pred <- apply(multi_pred, 1, which.max) - 1
 
 
 
+conf_matrix_binary <- confusionMatrix(as.factor(mclass_pred), as.factor(as.numeric(test_data$mclass)-1))
 
+
+pred_df <- data.frame(
+  .id = test_data$.id, 
+  bclass.pred = bclass_pred,
+  mclass.pred = mclass_pred
+)
+
+pred_df$bclass.pred <- factor(pred_df$bclass.pred, 
+                              levels = c(0,1), 
+                              labels =c("N/A: No relevant content.", "Relevant claim content"))
+
+pred_df$mclass.pred <- factor(pred_df$mclass.pred, 
+                              levels = c(0,1,2,3,4), 
+                              labels =c("N/A: No relevant content.", 
+                                        "Physical Activity",
+                                        "Possible Fatality",
+                                        "Potentially unlawful activity",
+                                        "Other claim content"))
+pred_df
