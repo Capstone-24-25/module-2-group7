@@ -290,7 +290,7 @@ fit_header <- glm(bclass~., data = train, family = binomial)
 
 # prediction on test data:
 # projecting test DTM onto training PCA space
-projected_test_dtm <- reproject_fn(.dtm = test_dtm_header, project_header)
+projected_header_test_dtm <- reproject_fn(.dtm = test_dtm_header, project_header)
 # predicting binary class probabilities
 prediction_header <- predict(fit_header, newdata = as.data.frame(projected_header_test_dtm),
                   type = 'response')
