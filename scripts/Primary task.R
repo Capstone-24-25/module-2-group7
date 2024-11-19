@@ -8,17 +8,18 @@ library(dplyr)
 library(SnowballC)
 library(tm)
 library(caret)
+library(textclean)
+library(glmnet)
+library(modelr)
+library(Matrix)
+library(sparsesvd)
+library(yardstick)
 
+
+## Pre-trained model
 # load cleaned data
-#### Change this data set to the data set after preliminary task
 load('data/claims-clean-example.RData')
-
-# Preprocess text data for RNN
-corpus <- Corpus(VectorSource(claims_clean$text_clean)) %>%
-  tm_map(content_transformer(tolower)) %>%  # Convert text to lowercase
-  tm_map(removePunctuation) %>%  # Remove punctuation
-  tm_map(removeNumbers) %>%  # Remove numbers
-  tm_map(stripWhitespace)  # Remove extra whitespace
+claims_clean<-cleaned_claims
 
 # Tokenization
 tokenizer <- text_tokenizer(num_words = 5000)
@@ -87,7 +88,7 @@ binary_pred<-predict(binary_model, X_test)
 bclass_pred <- factor(ifelse(binary_pred[,2] > 0.5, 1, 0), levels = c(0, 1))
 
 conf_matrix_binary <- confusionMatrix(bclass_pred, as.factor(as.numeric(test_data$bclass)-1))
-
+conf_matrix_binary
 
 # Build RNN model for multi-clss classification
 multi_model <- keras_model_sequential()
@@ -115,16 +116,91 @@ history_multi <- multi_model %>% fit(
 
 multi_pred<-predict(multi_model, X_test)
 mclass_pred <- apply(multi_pred, 1, which.max) - 1
+conf_matrix_multi <- confusionMatrix(as.factor(mclass_pred), as.factor(as.numeric(test_data$mclass)-1))
+conf_matrix_multi
 
-
-
-conf_matrix_binary <- confusionMatrix(as.factor(mclass_pred), as.factor(as.numeric(test_data$mclass)-1))
-
-
-pred_df <- data.frame(
+pred_df_model <- data.frame(
   .id = test_data$.id, 
   bclass.pred = bclass_pred,
   mclass.pred = mclass_pred
+)
+
+pred_df_model$bclass.pred <- factor(pred_df_model$bclass.pred, 
+                              levels = c(0,1), 
+                              labels =c("N/A: No relevant content.", "Relevant claim content"))
+
+pred_df_model$mclass.pred <- factor(pred_df_model$mclass.pred, 
+                              levels = c(0,1,2,3,4), 
+                              labels =c("N/A: No relevant content.", 
+                                        "Physical Activity",
+                                        "Possible Fatality",
+                                        "Potentially unlawful activity",
+                                        "Other claim content"))
+# pred_df_model
+
+######################## Test on claim test 
+load("data/claims-test.RData")
+
+## Preprocessing from Candis
+
+# function to parse html and clean text
+parse_fn <- function(.html){
+  read_html(.html) %>%
+    html_elements('p') %>% # extracts paragraph elements
+    html_text2() %>%
+    str_c(collapse = ' ') %>%
+    rm_url() %>% # remove url
+    rm_email() %>% # remove email
+    str_remove_all('\'') %>%
+    str_replace_all(paste(c('\n', 
+                            '[[:punct:]]', 
+                            'nbsp', 
+                            '[[:digit:]]', 
+                            '[[:symbol:]]'),
+                          collapse = '|'), ' ') %>%
+    str_replace_all("([a-z])([A-Z])", "\\1 \\2") %>%
+    tolower() %>% # lowercased
+    str_replace_all("\\s+", " ")
+}
+
+# function to apply to claims data
+parse_data <- function(.df){
+  out <- .df %>%
+    filter(str_detect(text_tmp, '<!')) %>%
+    rowwise() %>%
+    mutate(text_clean = parse_fn(text_tmp)) %>%
+    unnest(text_clean) 
+  return(out)
+}
+
+
+parsed_claim_test <- parse_data(claims_test)
+
+# Tokenization
+tokenizer_test <- text_tokenizer(num_words = 5000)
+tokenizer_test %>% fit_text_tokenizer(parsed_claim_test$text_clean)
+
+# Convert text to sequences
+sequences_test <- texts_to_sequences(tokenizer_test, parsed_claim_test$text_clean)
+# Set sequence length
+maxlen <- 100 
+# Set equal length
+same_len_data_test <- pad_sequences(sequences_test, maxlen = maxlen)
+parsed_claim_test <- parsed_claim_test %>% 
+  mutate(sequences_test = same_len_data_test)
+
+
+binary_pred_test <- predict(binary_model, parsed_claim_test$sequences_test)
+bclass_pred_test <- factor(ifelse(binary_pred_test[,2] > 0.5, 1, 0), levels = c(0, 1))
+
+
+multi_pred_test<-predict(multi_model, parsed_claim_test$sequences_test)
+mclass_pred_test <- apply(multi_pred_test, 1, which.max) - 1
+
+pred_df <- data.frame(
+  .id = parsed_claim_test$.id, 
+  bclass.pred = bclass_pred_test,
+  mclass.pred = mclass_pred_test
 )
 
 pred_df$bclass.pred <- factor(pred_df$bclass.pred, 
