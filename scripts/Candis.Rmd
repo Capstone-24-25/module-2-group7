@@ -1,0 +1,317 @@
+---
+title: "Preliminary Task 1"
+author: "Candis Wu"
+date: "2024-11-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Loading in Necessary Packages
+```{r}
+require(tidyverse) 
+require(tidytext)
+require(textstem)
+require(rvest)
+require(rsample)
+require(qdapRegex)
+require(stopwords)
+require(tokenizers)
+
+library(tidyverse)
+library(glmnet)
+library(tidymodels)
+library(modelr)
+library(Matrix)
+library(sparsesvd)
+library(yardstick)
+```
+
+
+## Loading in data
+```{r}
+# path to activity files on repo
+url <- 'https://raw.githubusercontent.com/pstat197/pstat197a/main/materials/activities/data/'
+# load functions needed for this assignment
+source(paste(url, 'projection-functions.R', sep = ''))
+source('preprocessing.R')
+load('~/Documents/GitHub/module-2-group7/data/claims-raw.RData')
+
+cleaned_claims <- claims_raw %>% parse_data() # preprocessing
+save(cleaned_claims, file = '~/Documents/GitHub/module-2-group7/data/claims-clean-example.RData')
+```
+
+# Preliminary Task 1
+Prompt: Augment the HTML scraping strategy so that header information is captured in addition to paragraph content. Are binary class predictions improved using logistic principal component regression?
+
+## Without Headers
+
+### Preprocessing
+```{r}
+# function to parse html and clean text
+parse_fn <- function(.html){
+  read_html(.html) %>%
+    html_elements('p') %>% # extracts paragraph elements
+    html_text2() %>%
+    str_c(collapse = ' ') %>%
+    rm_url() %>% # remove url
+    rm_email() %>% # remove email
+    str_remove_all('\'') %>%
+    str_replace_all(paste(c('\n', 
+                            '[[:punct:]]', 
+                            'nbsp', 
+                            '[[:digit:]]', 
+                            '[[:symbol:]]'),
+                          collapse = '|'), ' ') %>%
+    str_replace_all("([a-z])([A-Z])", "\\1 \\2") %>%
+    tolower() %>% # lowercased
+    str_replace_all("\\s+", " ")
+}
+
+# function to apply to claims data
+parse_data <- function(.df){
+  out <- .df %>%
+    filter(str_detect(text_tmp, '<!')) %>%
+    rowwise() %>%
+    mutate(text_clean = parse_fn(text_tmp)) %>%
+    unnest(text_clean) 
+  return(out)
+}
+```
+
+### Feature Extraction 
+```{r}
+nlp_fn <- function(parse_data.out){
+  out <- parse_data.out %>% 
+    # tokenizing text into individual words
+    unnest_tokens(output = token,
+                  input = text_clean, 
+                  token = 'words',
+                  # removing stop words
+                  stopwords = str_remove_all(stop_words$word, 
+                                             '[[:punct:]]')) %>%
+    # reducing words to base form (e.g. running -> run)
+    mutate(token.lem = lemmatize_words(token)) %>%
+    filter(str_length(token.lem) > 2) %>%
+    count(.id, bclass, mclass, token.lem, name = 'n') %>%
+    # computing Term Frequency-Inverse Document Frequency (TF-IDF) for each word
+    bind_tf_idf(term = token.lem, 
+                document = .id,
+                n = n) %>%
+    # transforms data into document-term matrix (DTM). where rows are documents and columns are TF-IDF scores for each term
+    pivot_wider(id_cols = c('.id', 'bclass', 'mclass'),
+                names_from = 'token.lem',
+                values_from = 'tf_idf',
+                values_fill = 0)
+  return(out)
+}
+
+tfidf <- nlp_fn(cleaned_claims)
+```
+
+### Data Partitioning 
+```{r}
+set.seed(203842)
+# splitting the data into training (80%) and testing (20%) sets
+partition <- tfidf %>% initial_split(prop = 0.8)
+
+# separating DTM from labels 
+train_dtm <- training(partition) %>% select(-.id, -bclass, -mclass)
+train_label <- training(partition) %>% select(.id, bclass, -mclass)
+
+test_dtm <- testing(partition) %>% select(-.id, -bclass, -mclass)
+test_label <- testing(partition) %>% select(.id, bclass, -mclass)
+```
+
+### Dimensionality Reduction (PCA)
+```{r}
+project <- projection_fn(.dtm = train_dtm, .prop = 0.7) # reducing training DTM’s size
+projected_train_dtm <- project$data # projects data onto principal components
+project$n_pc # number of components used
+```
+
+### Modeling and Evaluation
+```{r}
+# Logistic Regression
+train <- train_label %>% 
+  transmute(bclass = factor(bclass)) %>%
+  bind_cols(projected_train_dtm)
+
+# fitting a binary logistic regression model using principal components as predictors
+fit <- glm(bclass~., data = train, family = binomial)
+
+# prediction on test data:
+
+# projecting test DTM onto training PCA space
+projected_test_dtm <- reproject_fn(.dtm = test_dtm, project)
+# predicting binary class probabilities
+prediction <- predict(fit,newdata = as.data.frame(projected_test_dtm),
+                  type = 'response')
+
+# converting probabilities to binary class labels based on a threshold of 0.5.
+prediction_df <- test_label %>%
+  transmute(bclass = factor(bclass)) %>%
+  bind_cols(pred = as.numeric(prediction)) %>%
+  mutate(bclass.pred = factor(pred > 0.5, 
+                              labels = levels(bclass)))
+
+# evaluating model performance by calcuating metrics
+class_metrics <- metric_set(sensitivity, specificity, accuracy, roc_auc)
+prediction_df %>% class_metrics(trut = bclass, 
+                           estimate = bclass.pred, 
+                           pred, 
+                           event_level = 'second')
+```
+
+
+## With Headers
+
+### Preprocessing
+```{r}
+# function to parse html and clean text
+parse_fn_headers <- function(.html){
+  read_html(.html) %>%
+    html_elements('p, h1, h2, h3, h4, h5, h6') %>%
+    html_text2() %>%
+    str_c(collapse = ' ') %>%
+    rm_url() %>% # remove url
+    rm_email() %>% # remove email
+    str_remove_all('\'') %>%
+    str_replace_all(paste(c('\n', 
+                            '[[:punct:]]', 
+                            'nbsp', 
+                            '[[:digit:]]', 
+                            '[[:symbol:]]'),
+                          collapse = '|'), ' ') %>%
+    str_replace_all("([a-z])([A-Z])", "\\1 \\2") %>%
+    tolower() %>% # lowercased
+    str_replace_all("\\s+", " ")
+}
+
+# function to apply to claims data
+parse_data_headers <- function(.df){
+  out <- .df %>%
+    filter(str_detect(text_tmp, '<!')) %>%
+    rowwise() %>%
+    mutate(text_clean = parse_fn_headers(text_tmp)) %>%
+    unnest(text_clean) 
+  return(out)
+}
+```
+
+### Feature Extraction 
+```{r}
+nlp_fn <- function(parse_data_headers.out){
+  out <- parse_data_headers.out %>% 
+    # tokenizing text into individual words
+    unnest_tokens(output = token,
+                  input = text_clean, 
+                  token = 'words',
+                  # removing stop words
+                  stopwords = str_remove_all(stop_words$word, 
+                                             '[[:punct:]]')) %>%
+    # reducing words to base form (e.g. running -> run)
+    mutate(token.lem = lemmatize_words(token)) %>%
+    filter(str_length(token.lem) > 2) %>%
+    count(.id, bclass, mclass, token.lem, name = 'n') %>%
+    # computing Term Frequency-Inverse Document Frequency (TF-IDF) for each word
+    bind_tf_idf(term = token.lem, 
+                document = .id,
+                n = n) %>%
+    # transforms data into document-term matrix (DTM). where rows are documents and columns are TF-IDF scores for each term
+    pivot_wider(id_cols = c('.id', 'bclass', 'mclass'),
+                names_from = 'token.lem',
+                values_from = 'tf_idf',
+                values_fill = 0)
+  return(out)
+}
+
+cleaned_claims_headers <- claims_raw %>%
+  parse_data_headers()
+
+#load('data/cleaned_claims_headers.RData')
+headers_clean <- cleaned_claims_headers %>%
+  select(-c(1:5), -7)
+```
+
+
+```{r}
+tfidf_header <- headers_clean %>% 
+  unnest_tokens(output = token, 
+                input = text_clean, 
+                token = 'words',
+                stopwords = str_remove_all(stop_words$word, 
+                                           '[[:punct:]]')) %>%
+  mutate(token.lem = lemmatize_words(token)) %>%
+  filter(str_length(token.lem) > 2) %>%
+  count(.id, bclass, mclass, token.lem, name = 'n') %>%
+  bind_tf_idf(term = token.lem, 
+              document = .id,
+              n = n) %>%
+  pivot_wider(id_cols = c('.id', 'bclass', 'mclass'),
+              names_from = 'token.lem',
+              values_from = 'tf_idf',
+              values_fill = 0)
+
+```
+
+### Data Partitioning 
+```{r}
+set.seed(203842)
+# splitting the data into training (80%) and testing (20%) sets
+partition_header <- tfidf_header %>% initial_split(prop = 0.8)
+
+# separating DTM from labels 
+train_dtm_header <- training(partition_header) %>% select(-.id, -bclass, -mclass)
+train_label_header <- training(partition_header) %>% select(.id, bclass, -mclass)
+
+test_dtm_header <- testing(partition_header) %>% select(-.id, -bclass, -mclass)
+test_label_header <- testing(partition_header) %>% select(.id, bclass, -mclass)
+```
+
+### Dimensionality Reduction (PCA)
+```{r}
+project_header <- projection_fn(.dtm = train_dtm_header, .prop = 0.7) # reducing training DTM’s size
+projected_header_train_dtm <- project_header$data # projects data onto principal components
+project_header$n_pc # number of components used
+```
+
+### Modeling and Evaluation
+```{r}
+# Logistic Regression
+train_header <- train_label_header %>% 
+  transmute(bclass = factor(bclass)) %>%
+  bind_cols(projected_header_train_dtm)
+
+# fitting a binary logistic regression model using principal components as predictors
+fit_header <- glm(bclass~., data = train, family = binomial)
+
+# prediction on test data:
+# projecting test DTM onto training PCA space
+projected_test_dtm <- reproject_fn(.dtm = test_dtm_header, project_header)
+# predicting binary class probabilities
+prediction_header <- predict(fit_header, newdata = as.data.frame(projected_header_test_dtm),
+                  type = 'response')
+
+# converting probabilities to binary class labels based on a threshold of 0.5.
+prediction_df_header <- test_label_header %>%
+  transmute(bclass = factor(bclass)) %>%
+  bind_cols(pred = as.numeric(prediction_header)) %>%
+  mutate(bclass.pred = factor(pred > 0.5, 
+                              labels = levels(bclass)))
+
+# Evaluating model performance
+class_metrics <- metric_set(sensitivity, specificity, accuracy, roc_auc)
+prediction_df_header %>% class_metrics(truth = bclass, 
+                           estimate = bclass.pred, 
+                           pred, 
+                           event_level = 'second')
+
+```
+
+
+
+
+
