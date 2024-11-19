@@ -1,0 +1,337 @@
+---
+title: "PrimaryTask"
+output: html_document
+date: "2024-11-19"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(tidymodels)
+library(modelr)
+library(Matrix)
+library(sparsesvd)
+library(glmnet)
+library(dplyr)
+library(yardstick)
+library(tidyr)
+library(textstem)
+load('../data/headers-clean.RData')
+# path to activity files on repo
+url <- 'https://raw.githubusercontent.com/pstat197/pstat197a/main/materials/activities/data/'
+# load functions needed for this assignment
+source(paste(url, 'projection-functions.R', sep = ''))
+#source('Candis.R')
+```
+
+# Pre-processing
+```{r}
+tfidf_header <- headers_clean %>% 
+  unnest_tokens(output = token, 
+                input = text_clean, 
+                token = 'words',
+                stopwords = str_remove_all(stop_words$word, 
+                                           '[[:punct:]]')) %>%
+  mutate(token.lem = lemmatize_words(token)) %>%
+  filter(str_length(token.lem) > 2) %>%
+  count(.id, bclass, mclass, token.lem, name = 'n') %>%
+  bind_tf_idf(term = token.lem, 
+              document = .id,
+              n = n) %>%
+  pivot_wider(id_cols = c('.id', 'bclass', 'mclass'),
+              names_from = 'token.lem',
+              values_from = 'tf_idf',
+              values_fill = 0)
+```
+
+
+# Partition
+```{r}
+set.seed(111824)
+partitions <- tfidf_header %>% 
+  initial_split(prop=0.7)
+
+# Separate DTM from labels
+test_dtm <- testing(partitions) %>% 
+  select(-.id, -bclass, -mclass)
+test_labels <- testing(partitions) %>% 
+  select(.id, bclass, mclass)
+
+# Now for training test
+train_dtm <- training(partitions) %>% 
+  select(-.id, -bclass, -mclass)
+train_labels <- training(partitions) %>% 
+  select(.id, bclass, mclass)
+```
+
+# Projection
+```{r}
+proj_out <- projection_fn(.dtm = train_dtm, .prop = 0.7)
+train_dtm_projected <- proj_out$data
+
+# Components used
+proj_out$n_pc
+```
+
+# Regression
+```{r}
+train <- train_labels %>%
+  transmute(bclass = factor(bclass)) %>%
+  bind_cols(train_dtm_projected)
+
+fit <- glm(bclass ~ ., data = train, family='binomial')
+```
+
+# Fit regularized logistic regression
+```{r}
+# store predictors and response as matrix and vector
+x_train <- train %>% select(-bclass) %>% as.matrix()
+y_train <- train_labels %>% pull(bclass)
+
+# fit enet model
+alpha_enet <- 0.3
+fit_reg <- glmnet(x = x_train, 
+                  y = y_train, 
+                  family = 'binomial',
+                  alpha = alpha_enet)
+
+# choose a constrait strength by cross-validation
+set.seed(102722)
+cvout <- cv.glmnet(x = x_train, 
+                   y = y_train, 
+                   family = 'binomial',
+                   alpha = alpha_enet)
+
+# store optimal strength
+lambda_opt <- cvout$lambda.min
+
+# view results
+cvout
+```
+
+# Prediction and testing
+```{r}
+# project test data onto PCs
+test_dtm_projected <- reproject_fn(.dtm = test_dtm, proj_out)
+
+# coerce to matrix
+x_test <- as.matrix(test_dtm_projected)
+
+# compute predicted probabilities
+preds <- predict(fit_reg, 
+                 s = lambda_opt, 
+                 newx = x_test,
+                 type = 'response')
+
+# store predictions in a data frame with true labels
+pred_df <- test_labels %>%
+  transmute(bclass = factor(bclass)) %>%
+  bind_cols(pred = as.numeric(preds)) %>%
+  mutate(bclass.pred = factor(pred > 0.5, 
+                              labels = levels(bclass)))
+
+# define classification metric panel 
+panel <- metric_set(sensitivity, 
+                    specificity, 
+                    accuracy, 
+                    roc_auc)
+
+# compute test set accuracy
+pred_df %>% panel(truth = bclass, 
+                  estimate = bclass.pred, 
+                  pred, 
+                  event_level = 'second')
+```
+
+
+# Multinomial
+```{r}
+# get multiclass labels
+y_train_multi <- train_labels %>% pull(mclass)
+
+# fit enet model
+alpha_enet <- 0.2
+fit_reg_multi <- glmnet(x = x_train, 
+                        y = y_train_multi, 
+                        family = 'multinomial',
+                        alpha = alpha_enet)
+
+# choose a strength by cross-validation
+set.seed(102722)
+cvout_multi <- cv.glmnet(x = x_train, 
+                         y = y_train_multi, 
+                         family = 'multinomial',
+                         alpha = alpha_enet)
+
+# view results
+cvout
+
+preds_multi <- predict(fit_reg_multi, 
+                       s = cvout_multi$lambda.min, 
+                       newx = x_test,
+                       type = 'response')
+
+as_tibble(preds_multi[, , 1]) 
+
+pred_class <- as_tibble(preds_multi[, , 1]) %>% 
+  mutate(row = row_number()) %>%
+  pivot_longer(-row, 
+               names_to = 'label',
+               values_to = 'probability') %>%
+  group_by(row) %>%
+  slice_max(probability, n = 1) %>%
+  pull(label)
+
+pred_tbl <- table(pull(test_labels, mclass), pred_class)
+
+pred_tbl
+```
+
+# Evaluate accuracy of multinomial regression
+```{r}
+results_df <- tibble(
+  truth = factor(pull(test_labels, mclass)),
+  estimate = factor(pred_class, levels = levels(factor(pull(test_labels, mclass))))
+)
+
+panel <- metric_set(sensitivity, 
+                    specificity,
+                    accuracy)
+
+results <- results_df %>%
+  panel(truth = truth, estimate = estimate)
+
+results
+```
+
+# Pre-processing for 'claims-test.Rdata' using headers
+```{r}
+# From Candis.Rmd
+# function to parse html and clean text
+parse_fn_headers <- function(.html){
+  read_html(.html) %>%
+    html_elements('p, h1, h2, h3, h4, h5, h6') %>%
+    html_text2() %>%
+    str_c(collapse = ' ') %>%
+    rm_url() %>% # remove url
+    rm_email() %>% # remove email
+    str_remove_all('\'') %>%
+    str_replace_all(paste(c('\n', 
+                            '[[:punct:]]', 
+                            'nbsp', 
+                            '[[:digit:]]', 
+                            '[[:symbol:]]'),
+                          collapse = '|'), ' ') %>%
+    str_replace_all("([a-z])([A-Z])", "\\1 \\2") %>%
+    tolower() %>% # lowercased
+    str_replace_all("\\s+", " ")
+}
+
+# function to apply to claims data
+parse_data_headers <- function(.df){
+  out <- .df %>%
+    filter(str_detect(text_tmp, '<!')) %>%
+    rowwise() %>%
+    mutate(text_clean = parse_fn_headers(text_tmp)) %>%
+    unnest(text_clean) 
+  return(out)
+}
+
+```
+
+# apply preprocessing pipeline
+```{r}
+test_clean_df <- claims_test %>%
+  parse_data_headers() %>%
+  select(.id, text_clean)
+```
+
+# Tokenize and lemmatize
+```{r}
+tfidf_test_claim <- test_clean_df %>% 
+  unnest_tokens(output = token, 
+                input = text_clean, 
+                token = 'words',
+                stopwords = str_remove_all(stop_words$word, '[[:punct:]]')) %>%
+  mutate(token.lem = lemmatize_words(token)) %>%
+  filter(str_length(token.lem) > 2) %>%
+  count(.id, token.lem, name = 'n') %>%
+  bind_tf_idf(term = token.lem, 
+              document = .id,
+              n = n) %>%
+  pivot_wider(id_cols = c(.id),
+              names_from = 'token.lem',
+              values_from = 'tf_idf',
+              values_fill = 0)
+```
+
+```{r}
+# Extract terms from training data
+terms <- colnames(tfidf_header)
+terms <- terms[!terms %in% c('.id', 'bclass', 'mclass')]
+
+# Ensure test DTM has the same columns
+test_dtm <- tfidf_test_claim %>%
+  # Add missing terms with zeros
+  add_column(!!!set_names(rep(list(0), length(setdiff(terms, names(tfidf_test_claim)))), setdiff(terms, names(tfidf_test_claim)))) %>%
+  # Select columns in the same order as training data
+  select(.id, all_of(terms))
+
+# Store .id separately
+test_ids <- test_dtm$.id
+
+# Remove .id from test_dtm
+test_dtm <- test_dtm %>% select(-.id)
+
+```
+
+# Project to PCA
+```{r}
+# Project test data DTM onto PCs
+test_dtm_projected <- reproject_fn(.dtm = test_dtm, proj_out)
+
+# Coerce projected test data to matrix
+x_test <- as.matrix(test_dtm_projected)
+```
+
+# Binary Classification Predictions
+```{r}
+# Compute predicted probabilities
+preds_binary <- predict(fit_reg, 
+                        s = lambda_opt, 
+                        newx = x_test,
+                        type = 'response')
+
+# Convert probabilities to binary labels
+bclass_levels <- levels(train$bclass)
+bclass.pred <- factor(ifelse(preds_binary > 0.5, bclass_levels[2], bclass_levels[1]),
+                      levels = bclass_levels)
+
+```
+
+# Multinomial Classification Predictions
+```{r}
+# Compute predicted probabilities for multiclass
+preds_multi <- predict(fit_reg_multi, 
+                       s = cvout_multi$lambda.min, 
+                       newx = x_test,
+                       type = 'response')
+
+# Convert probabilities to class labels
+mclass_levels <- levels(factor(train_labels$mclass))
+
+# Get the predicted class labels
+pred_class <- apply(preds_multi[,,1], 1, function(x) mclass_levels[which.max(x)])
+mclass.pred <- factor(pred_class, levels = mclass_levels)
+```
+
+# Create pred_df
+```{r}
+pred_df <- tibble(
+  .id = test_ids,
+  bclass.pred = bclass.pred,
+  mclass.pred = mclass.pred
+)
+
+```
+
