@@ -1,0 +1,152 @@
+---
+title: "Keon Task 2"
+author: "Keon Dibley"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+# Load in required packages
+library(tidyverse)
+library(tidymodels)
+library(modelr)
+library(Matrix)
+library(sparsesvd)
+library(glmnet)
+library(tidytext)
+library(textstem)
+library(rvest)
+library(qdapRegex)
+library(stopwords)
+library(tokenizers)
+```
+
+### Loading in preprocessed data
+
+```{r}
+
+# path to activity files on repo
+url <- 'https://raw.githubusercontent.com/pstat197/pstat197a/main/materials/activities/data/'
+
+# load a few functions for the activity
+source(paste(url, 'projection-functions.R', sep = ''))
+
+source('C:/Users/Keon School/OneDrive/Documents/GitHub/module-2-group7/scripts/preprocessing.R')
+load('C:/Users/Keon School/OneDrive/Documents/GitHub/module-2-group7/data/claims-raw.RData')
+
+cleaned_claims <- claims_raw %>% parse_data() # preprocessing
+save(cleaned_claims, file = 'C:/Users/Keon School/OneDrive/Documents/GitHub/module-2-group7/data/claims-clean-example.RData')
+
+```
+
+
+```{r}
+set.seed(102722)
+claim_tfidf <- nlp_fn(cleaned_claims)
+
+```
+
+# Task 2
+
+Task: Perform a secondary tokenization of the data to obtain bigrams. Fit a logistic principal component regression model to the word-tokenized data, and then input the predicted log-odds-ratios together with some number of principal components of the bigram-tokenized data to a second logistic regression model. Based on the results, does it seem like the bigrams capture additional information about the claims status of a page?
+
+### Secondary Tokenization Function
+
+```{r}
+
+# Create a function for bigram tokenization
+bigram_tokenization <- function(data, text_column = "text_clean") {
+  data %>%
+    unnest_tokens(output = bigram,
+                  input = !!sym(text_column), 
+                  token = "ngrams", 
+                  n = 2) %>%
+    count(.id, bigram) %>%
+    cast_dtm(document = .id, term = bigram, value = n)
+}
+
+```
+
+### PCA Model on Word Tokenized Data
+
+```{r}
+partition <- claim_tfidf %>% initial_split(prop = 0.8)
+
+# separating DTM from labels 
+train_dtm <- training(partition) %>% select(-.id, -bclass)
+train_label <- training(partition) %>% select(.id, bclass)
+
+test_dtm <- testing(partition) %>% select(-.id, -bclass)
+test_label <- testing(partition) %>% select(.id, bclass)
+
+```
+
+```{r}
+projection <- projection_fn(.dtm = train_dtm, .prop = 0.7)
+train_dtm_projection <- projection$data
+
+# how many components were used?
+projection$n_pc
+
+```
+
+```{r}
+
+train_pca <- train_label %>%
+  transmute(bclass = factor(bclass)) %>%
+  bind_cols(train_dtm_projection)
+train_pca
+
+fit <- glm(bclass ~ ., data = train_pca, family = 'binomial')
+
+```
+
+```{r}
+
+test_dtm_projection <- reproject_fn(.dtm = test_dtm, projection)
+
+# coerce to matrix
+x_test_dtm <- as.data.frame(test_dtm_projection)
+
+# compute predicted probabilities
+predictions <- predict(fit, 
+                 newdata = x_test_dtm,
+                 type = 'response')
+
+
+
+# store predictions in a data frame with true labels
+pred_df <- test_label %>%
+  transmute(bclass = factor(bclass)) %>%
+  bind_cols(pred = as.numeric(predictions)) %>%
+  mutate(bclass.pred = factor(pred > 0.5, 
+                              labels = levels(bclass)))
+
+# define classification metric panel 
+panel <- metric_set(sensitivity, 
+                    specificity, 
+                    accuracy, 
+                    roc_auc)
+
+# compute test set accuracy
+pred_df %>% panel(truth = bclass, 
+                  estimate = bclass.pred, 
+                  pred, 
+                  event_level = 'second')
+
+
+```
+
+### Bigram Log Odds Model
+
+
+```{r}
+
+
+```
+
