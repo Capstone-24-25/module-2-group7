@@ -63,18 +63,18 @@ Both models are trained for **10 epochs** with a **batch size of 32**. Specifica
 
 ##### **Predictive Accuracy**
 
-1. **Binary Classification:** The trained binary model predicts probabilities for each test sequence. The predictions are **thresholded at 0.5** to decide class labels, meaning that the probability greater than 0.5 is considered as relevant content. The **accuracy** is about **0.715**, with a sensitivity around **0.787** and specificity around **0.658**. This indicates that the model correctly identifies **78.7%** website that is relevant and correctly identifies **65.8%** websites as not relevant. 
+1. **Binary Classification:** The trained binary model predicts probabilities for each test sequence. The predictions are **thresholded at 0.5** to decide class labels, meaning that the probability greater than 0.5 is considered as relevant content. The **accuracy** is about **0.757**, with a sensitivity around **0.686** and specificity around **0.813**. This indicates that the model correctly identifies **68.6%** website that is relevant and correctly identifies **81.3%** websites as not relevant. 
 
 
-2. **Multiclass Classification:** For multi-class classification, the accuracy is about **0.638**, with sensitivity and specificity for each category listed below.
+2. **Multiclass Classification:** For multi-class classification, the accuracy is about **0.696**, with an overall sensitivity **0.635** and overall specificity **0.913**. The detailed metric for each category is listed below.
 
 | Metric | Sensitivity | Specificity |
 |----------|----------|----------|
-| Class 0    | 0.639   | 0.741   |
-| Class 1    | 0.560   | 0.928   |
-| Class 2    | 0.679   | 0.888   |
-| Class 3    | 0.683   | 0.935   |
-| Class 4    | 0.231   | 0.961   |
+| Class 0    | 0.718   | 0.783   |
+| Class 1    | 0.612   | 0.973   |
+| Class 2    | 0.744   | 0.906   |
+| Class 3    | 0.730   | 0.941   |
+| Class 4    | 0.368   | 0.964   |
 
 It could be seen that the specificity is much higher than specificity, which indicates that the model could correctly identifies when an instance does not belong to that category, but it cannot correctly identify the correct category an instance belongs to. This might due to several reasons including a high decision threshold that the model tends to predict negative, and poor feature selection that the data cannot be distinguished between categories.
 

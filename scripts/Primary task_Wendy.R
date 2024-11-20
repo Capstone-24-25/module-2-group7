@@ -154,8 +154,10 @@ multi_pred<-predict(multi_model, X_test)
 mclass_pred <- apply(multi_pred, 1, which.max) - 1
 conf_matrix_multi <- confusionMatrix(as.factor(mclass_pred), as.factor(as.numeric(test_data$mclass)-1))
 conf_matrix_multi$overall["Accuracy"]
-conf_matrix_multi$byClass[, "Sensitivity"]
-conf_matrix_multi$byClass[, "Specificity"]
+mul_sense<-conf_matrix_multi$byClass[, "Sensitivity"]
+mul_spec<-conf_matrix_multi$byClass[, "Specificity"]
+mean(mul_sense)
+mean(mul_spec)
 
 pred_df_model <- data.frame(
   .id = test_data$.id, 
