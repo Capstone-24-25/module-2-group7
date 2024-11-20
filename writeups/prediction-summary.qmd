@@ -13,12 +13,11 @@ Provide a 3-5 sentence summary of your work on the primary task. Indicate what i
 ### Preprocessing
 
 In one paragraph lay out your preprocessing pipeline. No need to provide exact step-by-step detail; just give an overview of the main components:
-
 -   what text content was extracted from HTML
-
 -   how text was cleaned
-
 -   how cleaned text was represented quantitatively
+
+The preprocessing pipeline involved extracting paragraph and header text content from HTML documents. The text was cleaned by removing URLs, emails, punctuation, numbers, symbols, and excessive whitespace, converting text to lowercase, and normalizing words to their base forms via lemmatization. The cleaned text was then tokenized into individual words, with stop words excluded, and represented quantitatively using Term Frequency-Inverse Document Frequency (TF-IDF). This representation was transformed into a document-term matrix (DTM), reduced in dimensionality using Principal Component Analysis (PCA), and used to train a logistic regression model. The binary classification model's performance was evaluated using metrics such as accuracy and AUC, comparing results with and without header content.
 
 ### Methods
 
