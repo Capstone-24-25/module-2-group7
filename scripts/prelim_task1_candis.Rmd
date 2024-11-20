@@ -280,13 +280,13 @@ project_header$n_pc # number of components used
 
 ### Modeling and Evaluation
 ```{r}
-# Logistic Regression
+# logistic Regression
 train_header <- train_label_header %>% 
   transmute(bclass = factor(bclass)) %>%
   bind_cols(projected_header_train_dtm)
 
 # fitting a binary logistic regression model using principal components as predictors
-fit_header <- glm(bclass~., data = train, family = binomial)
+fit_header <- glm(bclass~., data = train_header, family = binomial)
 
 # prediction on test data:
 # projecting test DTM onto training PCA space
@@ -302,7 +302,7 @@ prediction_df_header <- test_label_header %>%
   mutate(bclass.pred = factor(pred > 0.5, 
                               labels = levels(bclass)))
 
-# Evaluating model performance
+# evaluating model performance
 class_metrics <- metric_set(sensitivity, specificity, accuracy, roc_auc)
 prediction_df_header %>% class_metrics(truth = bclass, 
                            estimate = bclass.pred, 
@@ -310,8 +310,6 @@ prediction_df_header %>% class_metrics(truth = bclass,
                            event_level = 'second')
 
 ```
-
-
 
 
 
