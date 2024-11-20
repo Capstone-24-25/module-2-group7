@@ -16,7 +16,8 @@ library(dplyr)
 library(yardstick)
 library(tidyr)
 library(textstem)
-load('../data/headers-clean.RData')
+load('../data/cleaned_claims_headers.Rdata')
+load('../data/claims-test.Rdata')
 # path to activity files on repo
 url <- 'https://raw.githubusercontent.com/pstat197/pstat197a/main/materials/activities/data/'
 # load functions needed for this assignment
@@ -26,6 +27,8 @@ source(paste(url, 'projection-functions.R', sep = ''))
 
 # Pre-processing
 ```{r}
+headers_clean <- cleaned_claims_headers %>%
+  select(-c(1:5), -7)
 tfidf_header <- headers_clean %>% 
   unnest_tokens(output = token, 
                 input = text_clean, 
@@ -333,5 +336,6 @@ pred_df <- tibble(
   mclass.pred = mclass.pred
 )
 
+pred_df
 ```
 
