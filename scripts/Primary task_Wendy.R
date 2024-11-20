@@ -17,9 +17,43 @@ library(yardstick)
 
 
 ## Pre-trained model
-# load cleaned data
-load('data/claims-clean-example.RData')
-claims_clean<-cleaned_claims
+
+# Load data
+load('data/claims-raw.RData')
+## Preprocessing with header from Candis
+parse_fn_headers <- function(.html){
+  read_html(.html) %>%
+    html_elements('p, h1, h2, h3, h4, h5, h6') %>%
+    html_text2() %>%
+    str_c(collapse = ' ') %>%
+    rm_url() %>% # remove url
+    rm_email() %>% # remove email
+    str_remove_all('\'') %>%
+    str_replace_all(paste(c('\n', 
+                            '[[:punct:]]', 
+                            'nbsp', 
+                            '[[:digit:]]', 
+                            '[[:symbol:]]'),
+                          collapse = '|'), ' ') %>%
+    str_replace_all("([a-z])([A-Z])", "\\1 \\2") %>%
+    tolower() %>% # lowercased
+    str_replace_all("\\s+", " ")
+}
+
+# function to apply to claims data
+parse_data_headers <- function(.df){
+  out <- .df %>%
+    filter(str_detect(text_tmp, '<!')) %>%
+    rowwise() %>%
+    mutate(text_clean = parse_fn_headers(text_tmp)) %>%
+    unnest(text_clean) 
+  return(out)
+}
+
+
+claims_clean<- parse_data_headers(claims_raw)%>%
+  select(.id, bclass, mclass, text_clean)
+
 
 # Tokenization
 tokenizer <- text_tokenizer(num_words = 5000)
@@ -88,7 +122,8 @@ binary_pred<-predict(binary_model, X_test)
 bclass_pred <- factor(ifelse(binary_pred[,2] > 0.5, 1, 0), levels = c(0, 1))
 
 conf_matrix_binary <- confusionMatrix(bclass_pred, as.factor(as.numeric(test_data$bclass)-1))
-conf_matrix_binary
+conf_matrix_binary$overall["Accuracy"]
+
 
 # Build RNN model for multi-clss classification
 multi_model <- keras_model_sequential()
@@ -117,7 +152,9 @@ history_multi <- multi_model %>% fit(
 multi_pred<-predict(multi_model, X_test)
 mclass_pred <- apply(multi_pred, 1, which.max) - 1
 conf_matrix_multi <- confusionMatrix(as.factor(mclass_pred), as.factor(as.numeric(test_data$mclass)-1))
-conf_matrix_multi
+conf_matrix_multi$overall["Accuracy"]
+
+evaluate()
 
 pred_df_model <- data.frame(
   .id = test_data$.id, 
@@ -140,41 +177,9 @@ pred_df_model$mclass.pred <- factor(pred_df_model$mclass.pred,
 
 ######################## Test on claim test 
 load("data/claims-test.RData")
+## Preprocessing
 
-## Preprocessing from Candis
-
-# function to parse html and clean text
-parse_fn <- function(.html){
-  read_html(.html) %>%
-    html_elements('p') %>% # extracts paragraph elements
-    html_text2() %>%
-    str_c(collapse = ' ') %>%
-    rm_url() %>% # remove url
-    rm_email() %>% # remove email
-    str_remove_all('\'') %>%
-    str_replace_all(paste(c('\n', 
-                            '[[:punct:]]', 
-                            'nbsp', 
-                            '[[:digit:]]', 
-                            '[[:symbol:]]'),
-                          collapse = '|'), ' ') %>%
-    str_replace_all("([a-z])([A-Z])", "\\1 \\2") %>%
-    tolower() %>% # lowercased
-    str_replace_all("\\s+", " ")
-}
-
-# function to apply to claims data
-parse_data <- function(.df){
-  out <- .df %>%
-    filter(str_detect(text_tmp, '<!')) %>%
-    rowwise() %>%
-    mutate(text_clean = parse_fn(text_tmp)) %>%
-    unnest(text_clean) 
-  return(out)
-}
-
-
-parsed_claim_test <- parse_data(claims_test)
+parsed_claim_test <- parse_data_headers(claims_test)
 
 # Tokenization
 tokenizer_test <- text_tokenizer(num_words = 5000)
