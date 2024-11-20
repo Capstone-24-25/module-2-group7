@@ -9,10 +9,10 @@ date: today
 Does including header content improve predictions? Answer the question and provide quantitative evidence supporting your answer.
 
 **Results Without Headers:**  
-The initial approach focused solely on paragraph content extracted from the HTML. After preprocessing, tokenization, and feature extraction (using TF-IDF), logistic principal component regression was applied. The model achieved a predictive accuracy of **85.7%** on the binary classification task. This baseline provided a reliable framework for evaluating improvements with header information included.
+The initial approach focused solely on paragraph content extracted from the HTML. After preprocessing, tokenization, and feature extraction (using TF-IDF), logistic principal component regression was applied. The model achieved a predictive accuracy of **74.68%** on the binary classification task. This baseline provided a reliable framework for evaluating improvements with header information included.
 
 **Results With Headers:**  
-When header information was added to the scraped content, the model underwent the same preprocessing pipeline, including dimensionality reduction via PCA and logistic regression. The inclusion of headers improved predictive accuracy to **87.9%**, representing a **2.2% increase** over the baseline. This suggests that headers contributed meaningful context or key terms that enhanced the model's ability to distinguish between binary classes.
+When header information was added to the scraped content, the model underwent the same preprocessing pipeline, including dimensionality reduction via PCA and logistic regression. The inclusion of headers improved predictive accuracy to **78.81%**, representing a **4.13% increase** over the baseline. This suggests that headers contributed meaningful context or key terms that enhanced the model's ability to distinguish between binary classes.
 
 **Comment on Accuracy:**  
 The improvement in predictive accuracy indicates that header information provides additional value, likely because headers often encapsulate key themes or summarizations of the text. Incorporating diverse structural elements of the document (beyond paragraphs) can be an effective strategy to boost performance in text classification tasks. 
