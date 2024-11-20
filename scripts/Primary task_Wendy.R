@@ -20,7 +20,7 @@ library(yardstick)
 
 # Load data
 load('data/claims-raw.RData')
-## Preprocessing with header from Candis
+## Preprocessing with header 
 parse_fn_headers <- function(.html){
   read_html(.html) %>%
     html_elements('p, h1, h2, h3, h4, h5, h6') %>%
@@ -68,6 +68,7 @@ same_len_data <- pad_sequences(sequences, maxlen = maxlen)
 claims_clean <- claims_clean %>% 
   mutate(sequences = same_len_data)
 
+#one-hot encoding
 # Encode binary label
 claims_clean <- claims_clean %>% 
   mutate(y_binary = to_categorical(as.numeric(as.factor(claims_clean$bclass))-1))
@@ -77,7 +78,7 @@ claims_clean <- claims_clean %>%
 
 # Train-test split
 set.seed(1)
-partition <- initial_split(claims_clean, prop = 0.8)  # 80% training, 20% testing
+partition <- initial_split(claims_clean,prop = 0.8)  # 80% training, 20% testing
 train_data <- training(partition)
 test_data <- testing(partition)
 
@@ -153,8 +154,8 @@ multi_pred<-predict(multi_model, X_test)
 mclass_pred <- apply(multi_pred, 1, which.max) - 1
 conf_matrix_multi <- confusionMatrix(as.factor(mclass_pred), as.factor(as.numeric(test_data$mclass)-1))
 conf_matrix_multi$overall["Accuracy"]
-
-evaluate()
+conf_matrix_multi$byClass[, "Sensitivity"]
+conf_matrix_multi$byClass[, "Specificity"]
 
 pred_df_model <- data.frame(
   .id = test_data$.id, 
@@ -173,7 +174,7 @@ pred_df_model$mclass.pred <- factor(pred_df_model$mclass.pred,
                                         "Possible Fatality",
                                         "Potentially unlawful activity",
                                         "Other claim content"))
-# pred_df_model
+#pred_df_model
 
 ######################## Test on claim test 
 load("data/claims-test.RData")

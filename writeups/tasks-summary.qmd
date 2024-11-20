@@ -1,6 +1,6 @@
 ---
 title: "Summary of exploratory tasks"
-author: 'Daniel Ledvin, Keon Dibley, Wendy Zhao, Candis Wu'
+author: 'Daniel Ledvin, Keon Dibley, Ziqian Zhao, Candis Wu'
 date: today
 ---
 
@@ -32,3 +32,50 @@ Summarize the neural network model you trained by describing:
 -   training epochs
 
 -   predictive accuracy
+
+#### RNN Description
+
+We explored Recurrent Neural Networks (RNNs) for predictive models for binary and multi-class setting classification. The data is preprocessed in preliminary part. 
+
+##### **Architecture**
+
+1. **Input Handling: **
+Text data is tokenized by converting text into sequences of integers, each representing a token. The sequences are padded to a fixed length of 100 to uniform input size for the models.
+
+2. **Model: **
+Both models begin with an `embedding` layer, which transforms each token into a dense vector of size 128. A `layer_simple_rnn` with 64 units is used to process the sequential data. This layer retains information about word order, enabling the network to handle contextual dependencies. For **binary classification**, a dense layer with 2 units is used, followed by a `sigmoid` activation function to output probabilities for each class. For **multiclass classification**, a dense layer with 5 units (one for each class) is used, followed by a `softmax` activation to output probabilities over all classes.
+
+
+##### **Optimization and Loss**
+
+1. **Optimization: ** Both models use the **Adam optimizer**, which adapts the learning rate during training for better convergence.
+
+2. **Loss Function:**
+   - **Binary classification**: `binary_crossentropy` is used to calculate the loss, as it is suited for tasks where the output is between two classes.
+   - **Multiclass classification**: `categorical_crossentropy` is used since the task involves multiple classes, with one-hot encoded labels.
+
+3. **Metrics:** The binary model used `binary_accuracy` for accuracy metric and the multiclass model use `accuracy` for accuracy metrics to monitor model performance during training.
+
+##### **Training Epochs**
+
+Both models are trained for **10 epochs** with a **batch size of 32**. Specifically, an epoch refers to one complete pass through the training dataset. Training for multiple epochs allows the model to see the data repeatedly, enabling it to learn patterns more effectively. Here, we choose 10 epochs with a batch size of 32 because our data is relatively small. Overfitting risks are reduced by monitoring accuracy trends during training.
+
+
+##### **Predictive Accuracy**
+
+1. **Binary Classification:** The trained binary model predicts probabilities for each test sequence. The predictions are **thresholded at 0.5** to decide class labels, meaning that the probability greater than 0.5 is considered as relevant content. The **accuracy** is about **0.715**, with a sensitivity around **0.787** and specificity around **0.658**. This indicates that the model correctly identifies **78.7%** website that is relevant and correctly identifies **65.8%** websites as not relevant. 
+
+
+2. **Multiclass Classification:** For multi-class classification, the accuracy is about **0.638**, with sensitivity and specificity for each category listed below.
+
+| Metric | Sensitivity | Specificity |
+|----------|----------|----------|
+| Class 0    | 0.639   | 0.741   |
+| Class 1    | 0.560   | 0.928   |
+| Class 2    | 0.679   | 0.888   |
+| Class 3    | 0.683   | 0.935   |
+| Class 4    | 0.231   | 0.961   |
+
+It could be seen that the specificity is much higher than specificity, which indicates that the model could correctly identifies when an instance does not belong to that category, but it cannot correctly identify the correct category an instance belongs to. This might due to several reasons including a high decision threshold that the model tends to predict negative, and poor feature selection that the data cannot be distinguished between categories.
+
+
