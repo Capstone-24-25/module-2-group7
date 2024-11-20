@@ -43,7 +43,7 @@ We explored Recurrent Neural Networks (RNNs) for predictive models for binary an
 Text data is tokenized by converting text into sequences of integers, each representing a token. The sequences are padded to a fixed length of 100 to uniform input size for the models.
 
 2. **Model: **
-Both models begin with an `embedding` layer, which transforms each token into a dense vector of size 128. A `layer_simple_rnn` with 64 units is used to process the sequential data. This layer retains information about word order, enabling the network to handle contextual dependencies. For **binary classification**, a dense layer with 2 units is used, followed by a `sigmoid` activation function to output probabilities for each class. For **multiclass classification**, a dense layer with 5 units (one for each class) is used, followed by a `softmax` activation to output probabilities over all classes.
+Both models have 4 layers. Both begin with an `embedding` layer, which transforms each token into a dense vector of size 128. A `layer_simple_rnn` with 64 units is used to process the sequential data. This layer retains information about word order, enabling the network to handle contextual dependencies. For *binary classification*, a dense layer with 2 units is used, followed by a `sigmoid` activation function to output probabilities for each class. For *multiclass classification*, a dense layer with 5 units (one for each class) is used, followed by a `softmax` activation to output probabilities over all classes.
 
 
 ##### **Optimization and Loss**
