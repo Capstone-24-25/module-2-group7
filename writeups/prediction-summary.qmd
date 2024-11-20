@@ -29,6 +29,15 @@ Describe your final predictive models. Include one paragraph with details on the
 
 -   training method
 
+We explored different techniques to find the most predictive model for binary and multiclass classification. One of our explorations is **Recurrent Neural Networks (RNN)**, specifically a **SimpleRNN** layer, for sequence-based tasks like text classification. The model is set up for **classification** (both binary and multiclass) with a **sigmoid** activation function for binary classification and **softmax** for multiclass classification. 
+
+The model is composed of 4 layers: an **embedding layer** to convert tokenized text into dense vectors, a **SimpleRNN** layer to process and learn patterns in sequences; a **dense layer** and an **activation layer**. The key hyperparameters include an embedding dimension of 128, 64 units in the RNN layer to control model capacity and complexity, and a batch size of 32 to control the model update frequency. The model uses **Adam optimizer**, with **binary crossentropy** loss for binary classification and **categorical crossentropy** loss for multiclass classification.
+
+The model is trained using the **fit()** method for 10 epochs processes 32 sequences at a time.The performance is measured using **accuracy** as the primary metric. After training, the model is evaluated on test data. The binary classification has an **accuracy** about **0.757**, with a **sensitivity** around **0.686** and **specificity** around **0.813**. The multi-class classification has an accuracy about **0.696**, with an overall sensitivity **0.635** and overall specificity **0.913**. The predicted result is stored as `results/preds-group7-RNN.RData`
+
+
+
+
 ### Results
 
 Indicate the predictive accuracy of the binary classifications and the multiclass classifications. Provide a table for each, and report sensitivity, specificity, and accuracy.[^1]

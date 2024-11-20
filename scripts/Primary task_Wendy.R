@@ -222,4 +222,5 @@ pred_df$mclass.pred <- factor(pred_df$mclass.pred,
                                         "Possible Fatality",
                                         "Potentially unlawful activity",
                                         "Other claim content"))
-pred_df
+
+save(pred_df, file = "results/preds-group7-RNN.RData")
