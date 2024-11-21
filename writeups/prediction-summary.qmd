@@ -24,10 +24,6 @@ Both models were trained on a dataset split, where 70% of data was partitioned i
 
 ### Results
 
-Indicate the predictive accuracy of the binary classifications and the multiclass classifications. Provide a table for each, and report sensitivity, specificity, and accuracy.[^1]
-
-[^1]: Read [this article](https://yardstick.tidymodels.org/articles/multiclass.html) on multiclass averaging.
-
 |   Metric    | Binary Estimate | Multiclass Estimate |
 |:-----------:|:---------------:|:-------------------:|
 | Sensitivity |    0.8209877    |      0.5768534      |
