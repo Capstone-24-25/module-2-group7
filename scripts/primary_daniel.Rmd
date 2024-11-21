@@ -8,6 +8,7 @@ date: "2024-11-19"
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(tidymodels)
+library(tidytext)
 library(modelr)
 library(Matrix)
 library(sparsesvd)
@@ -99,7 +100,7 @@ fit_reg <- glmnet(x = x_train,
                   alpha = alpha_enet)
 
 # choose a constrait strength by cross-validation
-set.seed(102722)
+set.seed(112024)
 cvout <- cv.glmnet(x = x_train, 
                    y = y_train, 
                    family = 'binomial',
@@ -160,7 +161,7 @@ fit_reg_multi <- glmnet(x = x_train,
                         alpha = alpha_enet)
 
 # choose a strength by cross-validation
-set.seed(102722)
+set.seed(112022)
 cvout_multi <- cv.glmnet(x = x_train, 
                          y = y_train_multi, 
                          family = 'multinomial',
@@ -206,6 +207,38 @@ results <- results_df %>%
 
 results
 ```
+# Save terms
+```{r}
+terms <- colnames(tfidf_header)
+terms <- terms[!terms %in% c('.id', 'bclass', 'mclass')]
+```
+
+# Save models and objects
+```{r}
+saveRDS(fit_reg, file = "../results/models/binary_model.rds")
+saveRDS(fit_reg_multi, file = "../results/models/multiclass_model.rds")
+saveRDS(proj_out, file = "../results/models/variables/proj_out.rds")
+saveRDS(terms, file = "../results/models/variables/terms.rds")
+saveRDS(lambda_opt, file = "../results/models/variables/lambda_opt.rds")
+saveRDS(cvout_multi$lambda.min, file = "../results/models/variables/lambda_multi_opt.rds")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Pre-processing for 'claims-test.Rdata' using headers
 ```{r}
@@ -337,5 +370,7 @@ pred_df <- tibble(
 )
 
 pred_df
+
+save(pred_df, file = "../results/preds-group7.RData")
 ```
 
