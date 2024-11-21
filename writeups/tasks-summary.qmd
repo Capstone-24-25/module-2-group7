@@ -21,6 +21,21 @@ The improvement in predictive accuracy indicates that header information provide
 
 Do bigrams capture additional information relevant to the classification of interest? Answer the question, **briefly** describe what analysis you conducted to arrive at your answer, and provide quantitative evidence supporting your answer.
 
+
+**Results Without Bigrams:**\
+
+Initially, the fitted model only analyzed single words, with each word being represented as a predictor variable for the original data set. We performed Principal Component Analysis (PCA) to reduce the number of predictors, and used these predictors in a Logistic Regression model to predict the claim status of a page. With this baseline model, we found an accuracy of **80.96%**. This is a good baseline model, but we looked to see if it would improve if we looked at combinations of **two words**. 
+
+**Results With Bigrams:**\
+
+To adjust our model to capture the combination of two successive words (bigrams) as predictors, we first tokenized our data differently so that each combination of two consecutive words  was its own predictor. Then, as before, we performed PCA to reduce dimensionality and proceeded to fitting a Logistic Regression model. This time, however, we included the log odds ratios of our first model as a predictor so that we could still use the predictive power of our baseline model in our new one. Our new model actually reported a much worse accuracy of **55.33%** in predicting claim status.
+
+**Comment on Accuracy:**\
+
+Based solely on our accuracy metric, it is clear that our model which included bigrams performed worse, indicating that they don't capture significant additional information relevant to predicting claim status. We think that this occurred because each bigram only appears in the data set rarely, which can make it very difficult to fit a model that will work on test data. Additionally, we found that our model had a very low **sensitivity** with a high **specificity**, which indicates that our model predicted more negative values than it should have. 
+
+
+
 ### Neural net
 
 Summarize the neural network model you trained by describing:

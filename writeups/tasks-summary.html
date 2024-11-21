@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Daniel Ledvin, Keon Dibley, Ziqian Zhao, Candis Wu">
-<meta name="dcterms.date" content="2024-11-19">
+<meta name="dcterms.date" content="2024-11-20">
 
 <title>Summary of exploratory tasks</title>
 <style>
@@ -64,7 +64,7 @@ ul.task-list li input[type="checkbox"] {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">November 19, 2024</p>
+      <p class="date">November 20, 2024</p>
     </div>
   </div>
   
@@ -87,6 +87,15 @@ The improvement in predictive accuracy indicates that header information provide
 <section id="bigrams" class="level3">
 <h3 class="anchored" data-anchor-id="bigrams">Bigrams</h3>
 <p>Do bigrams capture additional information relevant to the classification of interest? Answer the question, <strong>briefly</strong> describe what analysis you conducted to arrive at your answer, and provide quantitative evidence supporting your answer.</p>
+<p><strong>Results Without Bigrams:</strong><br>
+</p>
+<p>Initially, the fitted model only analyzed single words, with each word being represented as a predictor variable for the original data set. We performed Principal Component Analysis (PCA) to reduce the number of predictors, and used these predictors in a Logistic Regression model to predict the claim status of a page. With this baseline model, we found an accuracy of <strong>80.96%</strong>. This is a good baseline model, but we looked to see if it would improve if we looked at combinations of <strong>two words</strong>.</p>
+<p><strong>Results With Bigrams:</strong><br>
+</p>
+<p>To adjust our model to capture the combination of two successive words (bigrams) as predictors, we first tokenized our data differently so that each combination of two consecutive words was its own predictor. Then, as before, we performed PCA to reduce dimensionality and proceeded to fitting a Logistic Regression model. This time, however, we included the log odds ratios of our first model as a predictor so that we could still use the predictive power of our baseline model in our new one. Our new model actually reported a much worse accuracy of <strong>55.33%</strong> in predicting claim status.</p>
+<p><strong>Comment on Accuracy:</strong><br>
+</p>
+<p>Based solely on our accuracy metric, it is clear that our model which included bigrams performed worse, indicating that they don’t capture significant additional information relevant to predicting claim status. We think that this occurred because each bigram only appears in the data set rarely, which can make it very difficult to fit a model that will work on test data. Additionally, we found that our model had a very low <strong>sensitivity</strong> with a high <strong>specificity</strong>, which indicates that our model predicted more negative values than it should have.</p>
 </section>
 <section id="neural-net" class="level3">
 <h3 class="anchored" data-anchor-id="neural-net">Neural net</h3>
@@ -126,8 +135,8 @@ The improvement in predictive accuracy indicates that header information provide
 <section id="predictive-accuracy" class="level5">
 <h5 class="anchored" data-anchor-id="predictive-accuracy"><strong>Predictive Accuracy</strong></h5>
 <ol type="1">
-<li><p><strong>Binary Classification:</strong> The trained binary model predicts probabilities for each test sequence. The predictions are <strong>thresholded at 0.5</strong> to decide class labels, meaning that the probability greater than 0.5 is considered as relevant content. The <strong>accuracy</strong> is about <strong>0.715</strong>, with a sensitivity around <strong>0.787</strong> and specificity around <strong>0.658</strong>. This indicates that the model correctly identifies <strong>78.7%</strong> website that is relevant and correctly identifies <strong>65.8%</strong> websites as not relevant.</p></li>
-<li><p><strong>Multiclass Classification:</strong> For multi-class classification, the accuracy is about <strong>0.638</strong>, with sensitivity and specificity for each category listed below.</p></li>
+<li><p><strong>Binary Classification:</strong> The trained binary model predicts probabilities for each test sequence. The predictions are <strong>thresholded at 0.5</strong> to decide class labels, meaning that the probability greater than 0.5 is considered as relevant content. The <strong>accuracy</strong> is about <strong>0.757</strong>, with a sensitivity around <strong>0.686</strong> and specificity around <strong>0.813</strong>. This indicates that the model correctly identifies <strong>68.6%</strong> website that is relevant and correctly identifies <strong>81.3%</strong> websites as not relevant.</p></li>
+<li><p><strong>Multiclass Classification:</strong> For multi-class classification, the accuracy is about <strong>0.696</strong>, with an overall sensitivity <strong>0.635</strong> and overall specificity <strong>0.913</strong>. The detailed metric for each category is listed below.</p></li>
 </ol>
 <table class="table">
 <thead>
@@ -140,28 +149,28 @@ The improvement in predictive accuracy indicates that header information provide
 <tbody>
 <tr class="odd">
 <td>Class 0</td>
-<td>0.639</td>
-<td>0.741</td>
+<td>0.718</td>
+<td>0.783</td>
 </tr>
 <tr class="even">
 <td>Class 1</td>
-<td>0.560</td>
-<td>0.928</td>
+<td>0.612</td>
+<td>0.973</td>
 </tr>
 <tr class="odd">
 <td>Class 2</td>
-<td>0.679</td>
-<td>0.888</td>
+<td>0.744</td>
+<td>0.906</td>
 </tr>
 <tr class="even">
 <td>Class 3</td>
-<td>0.683</td>
-<td>0.935</td>
+<td>0.730</td>
+<td>0.941</td>
 </tr>
 <tr class="odd">
 <td>Class 4</td>
-<td>0.231</td>
-<td>0.961</td>
+<td>0.368</td>
+<td>0.964</td>
 </tr>
 </tbody>
 </table>
