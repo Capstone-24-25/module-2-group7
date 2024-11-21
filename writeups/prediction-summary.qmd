@@ -6,40 +6,30 @@ date: today
 
 ### Abstract
 
-Provide a 3-5 sentence summary of your work on the primary task. Indicate what input data was used, what method was used for binary class predictions, what method was used for multiclass predictions, and what estimated accuracies were achieved.
-
-> *Header and paragraph content was scraped from the raw webpages and processed into term frequencies of word tokens. For binary classification, a two-layer neural network yielded an estimated 81.4% accuracy; for multiclass classification, a support vector machine gave 78% accuracy.*
+In this report, two predictive models were developed to classify claims data, one using a binary approach and the other using a multiclass approach. Header and paragraph data was scraped from raw webpages, then cleaned and processed into term frequencies of word tokens. For binary classification, a regularized logistic regression with Elastic Net regularization was used, achieving an estimated accuracy of 81.1%. For multiclass classification, a multinomial logistic regression model with Elastic Net regularization was used, which gave an estimated 76.3% accuracy.
 
 ### Preprocessing
-
-In one paragraph lay out your preprocessing pipeline. No need to provide exact step-by-step detail; just give an overview of the main components:
--   what text content was extracted from HTML
--   how text was cleaned
--   how cleaned text was represented quantitatively
 
 The preprocessing pipeline involved extracting paragraph and header text content from HTML documents. The text was cleaned by removing URLs, emails, punctuation, numbers, symbols, and excessive whitespace, converting text to lowercase, and normalizing words to their base forms via lemmatization. The cleaned text was then tokenized into individual words, with stop words excluded, and represented quantitatively using Term Frequency-Inverse Document Frequency (TF-IDF). This representation was transformed into a document-term matrix (DTM), reduced in dimensionality using Principal Component Analysis (PCA), and used to train a logistic regression model. The binary classification model's performance was evaluated using metrics such as accuracy and AUC, comparing results with and without header content.
 
 ### Methods
 
-Describe your final predictive models. Include one paragraph with details on the binary classification approach, and one on the multiclass approach. Include for each:
+We explored different techniques to find the most predictive model for binary and multiclass classification. Our best model turned out to be a **Regularized Logistic Regression** model with **Elastic Net** regularization. This method works well with high-dimensional text data and balances between L1 and L2 regularization to improve model performance.
 
--   what ML/statistical method was used
+For the **binary classification**, our goal was to predict whether a claim contained relevant information. This model specification included a mixing parameter 'alpha = 0.3', which balanced lasso and ridge penalties. The regularization parameter 'lambda' was optimized using **cross-validation** to minimize cross-validated error, helping to prevent overfitting. This model used the **binomial family** for its classification.
 
--   model specification and hyperparameter selection
+For the **multiclass classification**, we aimed to predict if claims fell into specific categories or if they had no relevant information at all. We used the **multinomial family** parameter to allow for the model to handle multiple classes. The multiclass model used a mixing parameter 'alpha = 0.2', which places a greater emphasis on ridge regularization. This is more helpful in the case of multiclass classification since words that would be shrunk to zero by the lasso penalty might prove to be useful in determining which class a claim may fall into. As with the binary approach, the 'lambda' parameter was determined through **cross-validation**, optimizing the model's predictive accuracy across all classes.
 
--   training method
-
-We explored different techniques to find the most predictive model for binary and multiclass classification. One of our explorations is **Recurrent Neural Networks (RNN)**, specifically a **SimpleRNN** layer, for sequence-based tasks like text classification. The model is set up for **classification** (both binary and multiclass) with a **sigmoid** activation function for binary classification and **softmax** for multiclass classification. 
-
-The model is composed of 4 layers: an **embedding layer** to convert tokenized text into dense vectors, a **SimpleRNN** layer to process and learn patterns in sequences; a **dense layer** and an **activation layer**. The key hyperparameters include an embedding dimension of 128, 64 units in the RNN layer to control model capacity and complexity, and a batch size of 32 to control the model update frequency. The model uses **Adam optimizer**, with **binary crossentropy** loss for binary classification and **categorical crossentropy** loss for multiclass classification.
-
-The model is trained using the **fit()** method for 10 epochs processes 32 sequences at a time.The performance is measured using **accuracy** as the primary metric. After training, the model is evaluated on test data. The binary classification has an **accuracy** about **0.757**, with a **sensitivity** around **0.686** and **specificity** around **0.813**. The multi-class classification has an accuracy about **0.696**, with an overall sensitivity **0.635** and overall specificity **0.913**. The predicted result is stored as `results/preds-group7-RNN.RData`
-
-
-
+Both models were trained on a dataset split, where 70% of data was partitioned into training data and the remaining 30% was used for testing. Then, the training data was preprocessed, transformed into a **Term Frequency-Inverse Document Frequency (TF-IDF)** matrix, projected into **Principal Components**, and final used to train the models. The test data was then fed back into the models to find how well our models performed.
 
 ### Results
 
 Indicate the predictive accuracy of the binary classifications and the multiclass classifications. Provide a table for each, and report sensitivity, specificity, and accuracy.[^1]
 
 [^1]: Read [this article](https://yardstick.tidymodels.org/articles/multiclass.html) on multiclass averaging.
+
+|   Metric    | Binary Estimate | Multiclass Estimate |
+|:-----------:|:---------------:|:-------------------:|
+| Sensitivity |    0.8209877    |      0.5768534      |
+| Specificity |    0.8006536    |      0.9156054      |
+|  Accuracy   |    0.8111111    |      0.7634921      |
