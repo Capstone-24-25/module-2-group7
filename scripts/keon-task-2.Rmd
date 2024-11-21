@@ -24,6 +24,7 @@ library(rvest)
 library(qdapRegex)
 library(stopwords)
 library(tokenizers)
+library(yardstick)
 ```
 
 ### Loading in preprocessed data
@@ -36,11 +37,11 @@ url <- 'https://raw.githubusercontent.com/pstat197/pstat197a/main/materials/acti
 # load a few functions for the activity
 source(paste(url, 'projection-functions.R', sep = ''))
 
-source('C:/Users/Keon School/OneDrive/Documents/GitHub/module-2-group7/scripts/preprocessing.R')
-load('C:/Users/Keon School/OneDrive/Documents/GitHub/module-2-group7/data/claims-raw.RData')
+source('C:/Users/ircguest/Downloads/module-2-group7-main/module-2-group7-main/scripts/preprocessing.R')
+load('C:/Users/ircguest/Downloads/module-2-group7-main/module-2-group7-main/data/claims-raw.RData')
 
 cleaned_claims <- claims_raw %>% parse_data() # preprocessing
-save(cleaned_claims, file = 'C:/Users/Keon School/OneDrive/Documents/GitHub/module-2-group7/data/claims-clean-example.RData')
+save(cleaned_claims, file = 'C:/Users/ircguest/Downloads/module-2-group7-main/module-2-group7-main/data/claims-clean-example.RData')
 
 ```
 
@@ -49,25 +50,39 @@ save(cleaned_claims, file = 'C:/Users/Keon School/OneDrive/Documents/GitHub/modu
 set.seed(102722)
 claim_tfidf <- nlp_fn(cleaned_claims)
 
+claim_tfidf <- claim_tfidf %>% filter(.id != "url2328")
+
 ```
 
 # Task 2
 
 Task: Perform a secondary tokenization of the data to obtain bigrams. Fit a logistic principal component regression model to the word-tokenized data, and then input the predicted log-odds-ratios together with some number of principal components of the bigram-tokenized data to a second logistic regression model. Based on the results, does it seem like the bigrams capture additional information about the claims status of a page?
 
-### Secondary Tokenization Function
+### Secondary Bigram Tokenization Function
 
 ```{r}
 
 # Create a function for bigram tokenization
-bigram_tokenization <- function(data, text_column = "text_clean") {
-  data %>%
-    unnest_tokens(output = bigram,
-                  input = !!sym(text_column), 
-                  token = "ngrams", 
-                  n = 2) %>%
-    count(.id, bigram) %>%
-    cast_dtm(document = .id, term = bigram, value = n)
+bigram_tokenization <- function(parse_data.out){
+  out <- parse_data.out %>% 
+    unnest_tokens(output = token, 
+                  input = text_clean, 
+                  token = 'ngrams', 
+                  n = 2, 
+                  stopwords = str_remove_all(stop_words$word, 
+                                             '[[:punct:]]')) %>%
+    mutate(token.lem = lemmatize_words(token)) %>%
+    filter(str_length(token.lem) > 2) %>%
+    count(.id, bclass, token.lem, name = 'n') %>%
+    bind_tf_idf(term = token.lem, 
+                document = .id,
+                n = n) %>%
+    pivot_wider(id_cols = c('.id', 'bclass'),
+                names_from = 'token.lem',
+                values_from = 'tf_idf',
+                values_fill = 0)
+  
+  return(out)
 }
 
 ```
@@ -100,11 +115,12 @@ projection$n_pc
 train_pca <- train_label %>%
   transmute(bclass = factor(bclass)) %>%
   bind_cols(train_dtm_projection)
-train_pca
 
 fit <- glm(bclass ~ ., data = train_pca, family = 'binomial')
 
 ```
+
+### Base Model Metrics
 
 ```{r}
 
@@ -146,7 +162,91 @@ pred_df %>% panel(truth = bclass,
 
 
 ```{r}
+tfidf_bigram <- bigram_tokenization(cleaned_claims)
+
+partition_bi <- tfidf_bigram %>% initial_split(prop = 0.8)
+
+train_dtm_bi <- training(partition_bi) %>% select(-.id, -bclass)
+train_label_bi <- training(partition_bi) %>% select(.id, bclass)
+
+test_dtm_bi <- testing(partition_bi) %>% select(-.id, -bclass)
+test_label_bi <- testing(partition_bi) %>% select(.id, bclass)
+
+```
+
+
+
+```{r}
+
+projection_bi <- projection_fn(.dtm = train_dtm_bi, .prop = 0.7)
+train_dtm_projection_bi <- projection_bi$data
+
+# how many components were used?
+projection_bi$n_pc
+
+```
+
+```{r}
+test_projection <- reproject_fn(.dtm = test_dtm_bi, projection_bi)
+
+test_dtm_projection <- as.data.frame(test_projection)
+```
+
+
+
+### Log Odds + Bigrams Logistic Regression Model
+
+```{r}
+
+
+train_final <- train_label %>%
+  transmute(bclass = factor(bclass)) %>%
+  bind_cols(log_odds_word = predict(fit, type = "link")) %>%
+  bind_cols(train_dtm_projection_bi)
+
+#train_final
+
+fit_combined <- glm(bclass ~ ., data = train_final, family = "binomial")
+
+
+test_final <- test_label %>% 
+  transmute(bclass = factor(bclass)) %>%
+  bind_cols(log_odds_word = predict(fit, newdata = x_test_dtm, type = "link")) %>% 
+  bind_cols(test_dtm_projection)
+
+```
+
+
+### Final Metrics
+
+```{r}
+
+predictions_final <- predict(fit_combined, 
+                 newdata = test_final,
+                 type = 'response')
+
+
+# store predictions in a data frame with true labels
+pred_df_final <- test_label_bi %>%
+  transmute(bclass = factor(bclass)) %>%
+  bind_cols(pred = as.numeric(predictions_final)) %>%
+  mutate(bclass.pred = factor(pred > 0.5, 
+                              labels = levels(bclass)))
+
+# define classification metric panel 
+panel_final <- metric_set(sensitivity, 
+                    specificity, 
+                    accuracy, 
+                    roc_auc)
+
+# compute test set accuracy
+pred_df_final %>% panel_final(truth = bclass, 
+                  estimate = bclass.pred, 
+                  pred, 
+                  event_level = 'second')
 
 
 ```
 
+
+As seen above, all metrics are lower when we include bigrams in our model, which indicates that they don't provide significant additional information about the claims status of a page. Thus, we probably shouldn't include them in our model. 
